@@ -1,0 +1,15 @@
+{
+  "name": "parkfinder",
+  "version": "1.0.0",
+  "description": "停車雷達 — 全台路外停車場即時車位 + OSM 停車點地圖",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.22.2"
+  }
+}

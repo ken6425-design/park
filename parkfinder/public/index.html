@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>停車雷達 ｜ 全台找停車</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0d1320; --ink2:#0a0f1a;
+    --panel:rgba(20,28,44,.82);
+    --panel-solid:#141c2c;
+    --line:rgba(255,255,255,.08);
+    --brand:#3b82f6;
+    --green:#2bd46a; --amber:#f6b73c; --red:#ff4d6d; --grey:#7d8aa0;
+    --txt:#e8edf6; --muted:#93a0b6;
+    --mono:'Rajdhani',ui-monospace,'SF Mono',Menlo,monospace;
+    --sans:system-ui,-apple-system,'PingFang TC','Noto Sans TC','Microsoft JhengHei',sans-serif;
+    --sheet-h:46vh;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--ink);color:var(--txt);font-family:var(--sans);
+    -webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+  #map{position:fixed;inset:0;background:var(--ink2);z-index:0}
+  .leaflet-container{background:var(--ink2);font-family:var(--sans)}
+  .leaflet-control-attribution{background:rgba(10,15,26,.7)!important;color:#6f7c92!important;font-size:10px}
+  .leaflet-control-attribution a{color:#8aa0c6!important}
+  .leaflet-bar a{background:var(--panel-solid);color:var(--txt);border-color:var(--line)}
+  .leaflet-bar a:hover{background:#1d2740}
+
+  .topbar{position:fixed;top:0;left:0;right:0;z-index:600;padding:max(10px,env(safe-area-inset-top)) 10px 10px;
+    display:flex;gap:8px;align-items:center;
+    background:linear-gradient(180deg,rgba(8,12,20,.92),rgba(8,12,20,0))}
+  .brand{display:flex;align-items:center;gap:7px;padding-right:2px;flex:0 0 auto}
+  .brand .p{width:30px;height:30px;border-radius:7px;background:var(--brand);color:#fff;font-family:var(--mono);
+    font-weight:700;font-size:20px;display:grid;place-items:center;box-shadow:0 0 0 1px rgba(255,255,255,.12) inset}
+  .brand b{font-family:var(--mono);font-weight:700;letter-spacing:.5px;font-size:15px;white-space:nowrap}
+  .search{flex:1;position:relative;min-width:0}
+  .search input{width:100%;height:42px;border:1px solid var(--line);background:var(--panel);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--txt);
+    border-radius:11px;padding:0 38px 0 14px;font-size:15px;outline:none}
+  .search input::placeholder{color:var(--muted)}
+  .search input:focus{border-color:var(--brand)}
+  .search .go{position:absolute;right:6px;top:6px;width:30px;height:30px;border:0;border-radius:8px;
+    background:transparent;color:var(--muted);font-size:17px;cursor:pointer}
+  .iconbtn{flex:0 0 auto;width:42px;height:42px;border:1px solid var(--line);background:var(--panel);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--txt);border-radius:11px;
+    font-size:18px;cursor:pointer;display:grid;place-items:center}
+  .iconbtn:active{transform:scale(.94)}
+  .ac{position:absolute;top:48px;left:0;right:0;background:var(--panel-solid);border:1px solid var(--line);
+    border-radius:11px;overflow:hidden;box-shadow:0 14px 40px rgba(0,0,0,.5);display:none}
+  .ac.open{display:block}
+  .ac div{padding:11px 14px;font-size:14px;border-bottom:1px solid var(--line);cursor:pointer;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ac div:last-child{border-bottom:0}
+  .ac div:hover{background:#1d2740}
+
+  .controls{position:fixed;left:10px;top:64px;z-index:550;display:flex;flex-direction:column;gap:8px}
+  .seg{display:flex;background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{border:0;background:transparent;color:var(--muted);font-family:var(--mono);font-weight:600;
+    font-size:14px;padding:7px 11px;cursor:pointer}
+  .seg button.on{background:var(--brand);color:#fff}
+  .chip-toggle{display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:7px 11px;font-size:12.5px;color:var(--muted);cursor:pointer;
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+  .chip-toggle .dot{width:9px;height:9px;border-radius:50%;background:var(--grey)}
+  .chip-toggle.on{color:var(--txt)} .chip-toggle.on .dot{background:var(--green);box-shadow:0 0 8px var(--green)}
+
+  .rescan{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-h) + 14px);z-index:560;
+    background:var(--brand);color:#fff;border:0;border-radius:999px;padding:10px 18px;font-size:13.5px;
+    font-weight:600;box-shadow:0 8px 26px rgba(59,130,246,.5);cursor:pointer;display:flex;gap:7px;align-items:center;
+    transition:bottom .25s ease}
+  .rescan:active{transform:translateX(-50%) scale(.96)}
+  .rescan .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;
+    animation:sp .7s linear infinite;display:none}
+  .rescan.loading .spin{display:inline-block} .rescan.loading .lab{opacity:.7}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .sheet{position:fixed;left:0;right:0;bottom:0;height:var(--sheet-h);z-index:580;
+    background:var(--panel-solid);border-top:1px solid var(--line);border-radius:18px 18px 0 0;
+    box-shadow:0 -10px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;
+    transition:height .25s ease;padding-bottom:env(safe-area-inset-bottom)}
+  .sheet.collapsed{height:62px}
+  .sheet.tall{height:80vh}
+  .grip{padding:9px 14px 6px;display:flex;align-items:center;gap:10px;cursor:pointer;flex:0 0 auto;position:relative}
+  .grip .bar{position:absolute;left:50%;transform:translateX(-50%);top:6px;width:38px;height:4px;border-radius:99px;background:#33405c}
+  .grip h2{margin:0;font-size:15px;font-family:var(--mono);font-weight:700;letter-spacing:.3px}
+  .grip .count{font-size:12px;color:var(--muted);font-family:var(--mono)}
+  .grip .src{margin-left:auto;font-size:11px;color:var(--muted);text-align:right;line-height:1.3}
+  .legend{display:flex;gap:12px;padding:0 16px 8px;font-size:11px;color:var(--muted);flex-wrap:wrap;flex:0 0 auto}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:middle}
+  .list{overflow-y:auto;flex:1;padding:2px 10px 14px;-webkit-overflow-scrolling:touch}
+  .row{display:flex;align-items:center;gap:12px;padding:12px 8px;border-bottom:1px solid var(--line);cursor:pointer}
+  .row:active{background:#1a2236}
+  .row .meta{flex:1;min-width:0}
+  .row .nm{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .sub{font-size:12px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .dist{font-family:var(--mono);font-weight:600;color:var(--brand);font-size:13px;flex:0 0 auto}
+  .nav{flex:0 0 auto;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:#1a2236;
+    color:var(--txt);display:grid;place-items:center;text-decoration:none;font-size:16px}
+  .nav:active{background:#222d47}
+
+  .led{flex:0 0 auto;font-family:var(--mono);font-weight:700;border-radius:8px;padding:5px 9px;min-width:58px;
+    text-align:center;line-height:1.05;border:1px solid currentColor;background:rgba(0,0,0,.35)}
+  .led .n{font-size:18px;display:block} .led .t{font-size:9px;opacity:.85;letter-spacing:1px}
+  .led.green{color:var(--green);text-shadow:0 0 8px rgba(43,212,106,.55)}
+  .led.amber{color:var(--amber);text-shadow:0 0 8px rgba(246,183,60,.5)}
+  .led.red{color:var(--red);text-shadow:0 0 8px rgba(255,77,109,.5)}
+  .led.grey{color:var(--grey);border-style:dashed}
+  .pchip{flex:0 0 auto;width:42px;height:42px;border-radius:10px;background:rgba(59,130,246,.16);
+    border:1px solid rgba(59,130,246,.4);color:#9cc1ff;font-family:var(--mono);font-weight:700;font-size:22px;
+    display:grid;place-items:center}
+
+  .empty{padding:30px 18px;text-align:center;color:var(--muted);font-size:14px;line-height:1.6}
+
+  .mk-led{font-family:var(--mono);font-weight:700;font-size:12px;padding:3px 6px;border-radius:7px;border:1px solid currentColor;
+    background:rgba(8,12,20,.92);white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.5)}
+  .mk-led.green{color:var(--green)} .mk-led.amber{color:var(--amber)} .mk-led.red{color:var(--red)} .mk-led.grey{color:var(--grey)}
+  .mk-p{width:26px;height:26px;border-radius:8px;background:var(--brand);color:#fff;font-family:var(--mono);
+    font-weight:700;font-size:17px;display:grid;place-items:center;box-shadow:0 3px 10px rgba(0,0,0,.5);
+    border:1px solid rgba(255,255,255,.25)}
+  .mk-me{width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid var(--brand);box-shadow:0 0 0 6px rgba(59,130,246,.25)}
+  .leaflet-popup-content-wrapper{background:var(--panel-solid);color:var(--txt);border:1px solid var(--line);border-radius:12px}
+  .leaflet-popup-tip{background:var(--panel-solid)}
+  .pop b{font-size:14px} .pop .pr{font-size:12px;color:var(--muted);margin:5px 0;white-space:pre-line;max-width:220px}
+  .pop a{display:inline-block;margin-top:4px;background:var(--brand);color:#fff;text-decoration:none;padding:7px 12px;border-radius:8px;font-size:13px}
+
+  .toast{position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:calc(var(--sheet-h) + 64px);
+    z-index:900;background:#1d2740;border:1px solid var(--line);color:var(--txt);padding:11px 16px;border-radius:11px;
+    font-size:13px;max-width:84vw;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;
+    transition:opacity .25s,transform .25s}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media (min-width:820px){
+    :root{--sheet-h:100vh}
+    .sheet{left:auto;right:0;top:0;width:380px;height:100vh;border-radius:0;border-left:1px solid var(--line);border-top:0}
+    .sheet.collapsed,.sheet.tall{height:100vh}
+    .grip .bar{display:none}
+    .rescan{left:auto;right:404px;transform:none;bottom:24px}
+    .rescan:active{transform:scale(.96)}
+    .toast{left:auto;right:404px;transform:translateY(20px);bottom:24px}
+    .toast.show{transform:translateY(0)}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+  :focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="topbar">
+  <div class="brand"><span class="p">P</span><b>停車雷達</b></div>
+  <div class="search">
+    <input id="q" type="search" placeholder="搜尋目的地，例如 日月潭" autocomplete="off" enterkeyhint="search">
+    <button class="go" id="qgo" aria-label="搜尋">🔍</button>
+    <div class="ac" id="ac"></div>
+  </div>
+  <button class="iconbtn" id="locate" aria-label="定位到我的位置" title="我的位置">◎</button>
+</div>
+
+<div class="controls">
+  <div class="seg" role="group" aria-label="搜尋半徑">
+    <button data-r="300">300m</button>
+    <button data-r="800" class="on">800m</button>
+    <button data-r="2000">2km</button>
+  </div>
+  <button class="chip-toggle on" id="rtToggle"><span class="dot"></span>即時車位</button>
+</div>
+
+<button class="rescan" id="rescan"><span class="spin"></span><span class="lab">搜尋此區域</span></button>
+
+<div class="sheet" id="sheet">
+  <div class="grip" id="grip">
+    <span class="bar"></span>
+    <h2>附近停車</h2><span class="count" id="count"></span>
+    <span class="src" id="src"></span>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--green)"></i>充足</span>
+    <span><i style="background:var(--amber)"></i>一般</span>
+    <span><i style="background:var(--red)"></i>將滿/已滿</span>
+    <span><i style="background:var(--grey)"></i>無即時</span>
+    <span><i style="background:var(--brand)"></i>停車場位置</span>
+  </div>
+  <div class="list" id="list"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+"use strict";
+
+const OVERPASS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter"
+];
+const DEFAULT = [25.0375, 121.5637];
+const state = {
+  radius: 800, rtOn: true, focus: null,
+  osm: [], rt: [], rtTime: "", noTdx: false,
+  markers: L.layerGroup(), meMarker: null
+};
+
+const $ = s => document.querySelector(s);
+function toast(msg, ms=3400){ const t=$("#toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"), ms); }
+function haversine(a,b,c,d){ const R=6371000,r=Math.PI/180;
+  const u=(c-a)*r,v=(d-b)*r,s=Math.sin(u/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(v/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s)); }
+function fmtDist(m){ return m<1000 ? Math.round(m)+" m" : (m/1000).toFixed(m<10000?1:0)+" km"; }
+function navUrl(lat,lng){ return "https://www.google.com/maps/dir/?api=1&destination="+lat+","+lng; }
+function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function rank(avail,total){
+  if(avail===null||avail<0) return {cls:"grey",txt:"—"};
+  if(avail===0) return {cls:"red",txt:"0"};
+  const r = total>0 ? avail/total : 1;
+  if(r>=0.2) return {cls:"green",txt:String(avail)};
+  if(r>=0.05) return {cls:"amber",txt:String(avail)};
+  return {cls:"red",txt:String(avail)};
+}
+
+/* 地圖 */
+const map=L.map("map",{zoomControl:false,attributionControl:true,tap:true}).setView(DEFAULT,15);
+L.control.zoom({position:"topright"}).addTo(map);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
+  maxZoom:20, subdomains:"abcd",
+  attribution:'© OpenStreetMap, © CARTO ｜ 即時車位：TDX 運輸資料流通服務平臺'
+}).addTo(map);
+state.markers.addTo(map);
+
+/* 即時車位（後端 / TDX） */
+async function loadRT(lat,lng,radius){
+  if(!state.rtOn){ state.rt=[]; return; }
+  try{
+    const r=await fetch(`/api/parking/near?lat=${lat}&lng=${lng}&radius=${radius}`);
+    const j=await r.json();
+    if(j.note==="no_tdx"){ state.noTdx=true; state.rt=[]; }
+    else { state.noTdx=false; state.rt=(j.lots||[]).map(l=>({...l,kind:"rt"})); state.rtTime=j.updateTime||state.rtTime; }
+  }catch(e){ state.rt=[]; }
+  updateSrc();
+}
+
+/* OSM 停車場位置 */
+async function loadOSM(lat,lng,radius){
+  const ql=`[out:json][timeout:25];(node["amenity"="parking"](around:${radius},${lat},${lng});`+
+           `way["amenity"="parking"](around:${radius},${lat},${lng}););out center tags 80;`;
+  for(const ep of OVERPASS){
+    try{
+      const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(ql)});
+      if(!r.ok) continue;
+      const j=await r.json();
+      return (j.elements||[]).map(el=>{
+        const la=el.lat??(el.center&&el.center.lat), ln=el.lon??(el.center&&el.center.lon);
+        if(la==null||ln==null) return null;
+        const tg=el.tags||{};
+        return { id:"osm"+el.type+el.id, name:tg.name||"停車場", lat:la, lng:ln, kind:"osm",
+          access:tg.access||"", fee:tg.fee||"" };
+      }).filter(Boolean);
+    }catch(e){}
+  }
+  throw new Error("overpass");
+}
+
+/* 合併 + 渲染 */
+function combined(){
+  const f=state.focus||{lat:map.getCenter().lat,lng:map.getCenter().lng};
+  const rt=state.rtOn?state.rt:[];
+  const out=rt.map(p=>({...p, dist:p.dist??haversine(f.lat,f.lng,p.lat,p.lng)}));
+  state.osm.forEach(p=>{
+    const dup=rt.some(t=>haversine(t.lat,t.lng,p.lat,p.lng)<45);
+    if(!dup) out.push({...p, dist:haversine(f.lat,f.lng,p.lat,p.lng)});
+  });
+  out.sort((a,b)=>a.dist-b.dist);
+  return out;
+}
+function render(){
+  const items=combined();
+  state.markers.clearLayers();
+  items.slice(0,220).forEach(p=>{
+    let icon;
+    if(p.kind==="rt"){
+      const rk=rank(p.available,p.total);
+      icon=L.divIcon({className:"",html:`<div class="mk-led ${rk.cls}">餘${rk.txt}</div>`,iconSize:null});
+    }else{
+      icon=L.divIcon({className:"",html:`<div class="mk-p">P</div>`,iconSize:[26,26],iconAnchor:[13,13]});
+    }
+    const m=L.marker([p.lat,p.lng],{icon}).addTo(state.markers);
+    m.on("click",()=>openPopup(m,p));
+  });
+  const list=$("#list"); list.innerHTML="";
+  $("#count").textContent = items.length?`· ${items.length} 處`:"";
+  if(!items.length){
+    list.innerHTML=`<div class="empty">這個範圍找不到停車場。<br>試試放大搜尋半徑、移動地圖後按「搜尋此區域」，或直接搜尋目的地。</div>`;
+  }
+  items.slice(0,50).forEach(p=>{
+    const row=document.createElement("div"); row.className="row";
+    let right,sub;
+    if(p.kind==="rt"){
+      const rk=rank(p.available,p.total);
+      right=`<div class="led ${rk.cls}"><span class="n">${rk.txt}</span><span class="t">${p.total>0?"/"+p.total:"餘位"}</span></div>`;
+      sub = p.fare? p.fare.replace(/\s+/g," ").slice(0,30) : (p.address||"路外停車場");
+    }else{
+      right=`<div class="pchip">P</div>`;
+      sub = (p.access==="private"?"私人":p.access==="customers"?"消費者專用":"")+(p.fee==="yes"?" 收費":p.fee==="no"?" 免費":"")||"OpenStreetMap";
+    }
+    row.innerHTML=`${right}<div class="meta"><div class="nm">${esc(p.name)}</div>
+      <div class="sub">${esc(sub)}</div></div>
+      <div class="dist">${fmtDist(p.dist)}</div>
+      <a class="nav" href="${navUrl(p.lat,p.lng)}" target="_blank" rel="noopener" aria-label="導航">➤</a>`;
+    row.addEventListener("click",e=>{ if(e.target.closest(".nav"))return;
+      map.flyTo([p.lat,p.lng],17); sheet.classList.add("collapsed"); sheet.classList.remove("tall"); });
+    list.appendChild(row);
+  });
+}
+function openPopup(m,p){
+  let html=`<div class="pop"><b>${esc(p.name)}</b>`;
+  if(p.kind==="rt"){
+    const rk=rank(p.available,p.total);
+    const lab=rk.cls==="grey"?"目前無即時資料":`剩餘 ${rk.txt}${p.total>0?" / 共 "+p.total:""} 格`;
+    html+=`<div class="pr">${lab}${p.fare?"\n"+esc(p.fare.replace(/\s+/g," ").slice(0,60)):""}${p.address?"\n"+esc(p.address):""}</div>`;
+  }else{
+    html+=`<div class="pr">${esc(p.access||"公共")} ｜ 來源：OpenStreetMap</div>`;
+  }
+  html+=`<a href="${navUrl(p.lat,p.lng)}" target="_blank" rel="noopener">導航前往 ➤</a></div>`;
+  m.bindPopup(html,{closeButton:true}).openPopup();
+}
+
+/* 動作 */
+async function scan(lat,lng){
+  const btn=$("#rescan"); btn.classList.add("loading");
+  state.focus={lat,lng};
+  const tasks=[ loadRT(lat,lng,state.radius),
+    loadOSM(lat,lng,state.radius).then(r=>state.osm=r).catch(()=>toast("附近停車場查詢逾時，請稍後再試或縮小範圍")) ];
+  await Promise.allSettled(tasks);
+  btn.classList.remove("loading");
+  if(state.noTdx){ toast("未設定 TDX 金鑰，目前只顯示停車場位置（無即時車位）",4200); state.noTdx=false; }
+  render();
+}
+function setFocus(lat,lng,zoom){ state.focus={lat,lng}; map.flyTo([lat,lng],zoom||15); }
+
+function locate(){
+  if(!navigator.geolocation){ toast("此裝置不支援定位"); return; }
+  toast("定位中…",1500);
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const{latitude:la,longitude:ln}=pos.coords;
+    if(state.meMarker) state.meMarker.remove();
+    state.meMarker=L.marker([la,ln],{icon:L.divIcon({className:"",html:'<div class="mk-me"></div>',iconSize:[18,18],iconAnchor:[9,9]}),zIndexOffset:1000}).addTo(map);
+    setFocus(la,ln,16); scan(la,ln);
+  },()=>{
+    toast("無法取得定位，已顯示台北市中心。可直接搜尋目的地。");
+    setFocus(DEFAULT[0],DEFAULT[1],15); scan(DEFAULT[0],DEFAULT[1]);
+  },{enableHighAccuracy:true,timeout:8000,maximumAge:60000});
+}
+
+/* 目的地搜尋 */
+let acTimer;
+async function geocode(q){
+  const url="https://nominatim.openstreetmap.org/search?format=json&limit=5&accept-language=zh-TW&q="+encodeURIComponent(q);
+  const r=await fetch(url,{headers:{"Accept":"application/json"}});
+  return r.ok? r.json():[];
+}
+function showAC(items){
+  const ac=$("#ac");
+  if(!items.length){ ac.classList.remove("open"); ac.innerHTML=""; return; }
+  ac.innerHTML=items.map((it,i)=>`<div data-i="${i}">${esc(it.display_name)}</div>`).join("");
+  ac.classList.add("open");
+  ac.querySelectorAll("div").forEach(d=>d.addEventListener("click",()=>{
+    const it=items[+d.dataset.i]; ac.classList.remove("open"); $("#q").value=it.display_name.split(",")[0];
+    setFocus(+it.lat,+it.lon,16); scan(+it.lat,+it.lon);
+  }));
+}
+async function doSearch(){
+  const q=$("#q").value.trim(); if(!q) return;
+  $("#ac").classList.remove("open");
+  try{
+    const items=await geocode(q);
+    if(!items.length){ toast("找不到「"+q+"」，換個關鍵字試試"); return; }
+    const it=items[0]; setFocus(+it.lat,+it.lon,16); scan(+it.lat,+it.lon);
+  }catch(e){ toast("搜尋服務忙線，請稍後再試"); }
+}
+
+/* 事件 */
+$("#locate").addEventListener("click",locate);
+$("#qgo").addEventListener("click",doSearch);
+$("#q").addEventListener("keydown",e=>{ if(e.key==="Enter") doSearch(); });
+$("#q").addEventListener("input",()=>{
+  clearTimeout(acTimer); const q=$("#q").value.trim();
+  if(q.length<2){ $("#ac").classList.remove("open"); return; }
+  acTimer=setTimeout(async()=>{ try{ showAC(await geocode(q)); }catch(e){} },350);
+});
+document.addEventListener("click",e=>{ if(!e.target.closest(".search")) $("#ac").classList.remove("open"); });
+$("#rescan").addEventListener("click",()=>{ const c=map.getCenter(); scan(c.lat,c.lng); });
+document.querySelectorAll(".seg button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".seg button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); state.radius=+b.dataset.r;
+  const c=map.getCenter(); scan(c.lat,c.lng);
+}));
+$("#rtToggle").addEventListener("click",()=>{
+  state.rtOn=!state.rtOn; $("#rtToggle").classList.toggle("on",state.rtOn);
+  if(state.rtOn && state.focus){ loadRT(state.focus.lat,state.focus.lng,state.radius).then(render); }
+  else render();
+  updateSrc();
+});
+
+const sheet=$("#sheet");
+$("#grip").addEventListener("click",()=>{
+  if(sheet.classList.contains("collapsed")) sheet.classList.remove("collapsed");
+  else if(sheet.classList.contains("tall")){ sheet.classList.add("collapsed"); sheet.classList.remove("tall"); }
+  else sheet.classList.add("tall");
+});
+map.on("moveend",render);
+
+function updateSrc(){
+  const s=$("#src");
+  if(!state.rtOn){ s.textContent="即時車位：已關閉"; return; }
+  if(state.noTdx){ s.textContent="未設定 TDX 金鑰"; return; }
+  s.innerHTML = state.rtTime ? `全台即時 · 更新<br>${esc(String(state.rtTime).slice(5,16).replace("T"," "))}` : "全台即時 · 載入中…";
+}
+
+/* 啟動 */
+(function init(){
+  updateSrc();
+  locate();
+  setInterval(()=>{ if(state.rtOn && state.focus){ loadRT(state.focus.lat,state.focus.lng,state.radius).then(render); } }, 60000);
+})();
+</script>
+</body>
+</html>
